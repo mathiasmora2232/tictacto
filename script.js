@@ -1,30 +1,54 @@
+const socket = new WebSocket("ws://localhost:3000");
+
+let myPlayer = null;
+let isMyTurn = false;
 let board = ['', '', '', '', '', '', '', '', ''];
-let currentPlayer = 'X';
 let gameActive = true;
 let isAIMode = false;
 
 const winningCombinations = [
-    [0, 1, 2],
-    [3, 4, 5],
-    [6, 7, 8],
-    [0, 3, 6],
-    [1, 4, 7],
-    [2, 5, 8],
-    [0, 4, 8],
-    [2, 4, 6]
+    [0, 1, 2], [3, 4, 5], [6, 7, 8],
+    [0, 3, 6], [1, 4, 7], [2, 5, 8],
+    [0, 4, 8], [2, 4, 6]
 ];
 
+// --- GESTIÓN DE MENSAJES RECIBIDOS ---
+socket.onmessage = (event) => {
+    const data = JSON.parse(event.data);
+
+    if (data.type === 'player') {
+        myPlayer = data.player;
+        isMyTurn = (myPlayer === 'X');
+        updateInfo();
+    }
+
+    if (data.type === 'move') {
+        board[data.index] = data.player;
+        isMyTurn = true; // Ahora es mi turno porque el otro ya movió
+        renderBoard();
+        updateInfo();
+    }
+
+    if (data.type === 'reset') {
+        executeLocalReset();
+    }
+};
+
+// --- LÓGICA DEL JUEGO ---
 function updateInfo() {
     const infoDiv = document.getElementById('info');
     const winner = checkWinner();
+
     if (winner) {
-        infoDiv.textContent = `¡${winner} ganó! 🎉`;
+        infoDiv.textContent = `!El jugador ${winner} ganó!`;
         gameActive = false;
     } else if (board.every(cell => cell !== '')) {
-        infoDiv.textContent = 'Empate ';
+        infoDiv.textContent = '¡Empate!';
         gameActive = false;
     } else {
-        infoDiv.textContent = `Turno: ${currentPlayer}`;
+        if (myPlayer) {
+            infoDiv.textContent = isMyTurn ? `Tu turno (${myPlayer})` : `Espera al oponente...`;
+        }
     }
 }
 
@@ -39,38 +63,22 @@ function checkWinner() {
 }
 
 function makeMove(index) {
-    if (board[index] === '' && gameActive) {
-        board[index] = currentPlayer;
-        renderBoard();
-        
-        if (!checkWinner() && !board.every(cell => cell !== '')) {
-            currentPlayer = currentPlayer === 'X' ? 'O' : 'X';
-            updateInfo();
-            
-            if (isAIMode && currentPlayer === 'O' && gameActive) {
-                setTimeout(makeAIMove, 500);
-            }
-        } else {
-            updateInfo();
-        }
-    }
-}
+    if (!isMyTurn || board[index] !== '' || !gameActive || isAIMode) return;
 
-function makeAIMove() {
-    const availableMoves = board
-        .map((cell, index) => cell === '' ? index : null)
-        .filter(val => val !== null);
+    // 1. Marcar localmente
+    board[index] = myPlayer;
+    renderBoard();
     
-    if (availableMoves.length > 0) {
-        const randomIndex = availableMoves[Math.floor(Math.random() * availableMoves.length)];
-        board[randomIndex] = 'O';
-        renderBoard();
-        
-        if (!checkWinner() && !board.every(cell => cell !== '')) {
-            currentPlayer = 'X';
-        }
-        updateInfo();
-    }
+    // 2. Notificar al servidor
+    socket.send(JSON.stringify({
+        type: 'move',
+        index: index,
+        player: myPlayer
+    }));
+
+    // 3. Bloquear turno
+    isMyTurn = false;
+    updateInfo();
 }
 
 function renderBoard() {
@@ -83,33 +91,34 @@ function renderBoard() {
     });
 }
 
+// --- FUNCIONES DE REINICIO ---
 function resetGame() {
+    // Enviar petición de reinicio al servidor
+    if (socket.readyState === WebSocket.OPEN) {
+        socket.send(JSON.stringify({ type: 'reset' }));
+    }
+}
+
+function executeLocalReset() {
     board = ['', '', '', '', '', '', '', '', ''];
-    currentPlayer = 'X';
     gameActive = true;
+    isMyTurn = (myPlayer === 'X'); // Siempre inicia X
     renderBoard();
     updateInfo();
 }
 
-function toggleMode() {
-    isAIMode = !isAIMode;
-    const modeText = document.getElementById('modeText');
-    const modeDisplay = document.getElementById('modeDisplay');
-    
-    if (isAIMode) {
-        modeText.textContent = 'IA';
-        modeDisplay.textContent = 'Jugador vs IA';
-    } else {
-        modeText.textContent = 'PvP';
-        modeDisplay.textContent = 'Jugador vs Jugador';
-    }
-    resetGame();
-}
-
+// --- EVENTOS ---
 document.querySelectorAll('.cell').forEach(cell => {
     cell.addEventListener('click', () => {
         makeMove(parseInt(cell.dataset.index));
     });
 });
 
+function toggleMode() {
+    // Desactivamos temporalmente el socket si entras en modo IA 
+    // para evitar conflictos, o simplemente mostramos alerta.
+    alert("El modo IA es para práctica local solamente.");
+}
+
+renderBoard();
 updateInfo();
