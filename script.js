@@ -1,4 +1,4 @@
-const socket = new WebSocket("ws://localhost:3000");
+const socket = new WebSocket(`ws://${window.location.hostname}:${window.location.port || 3000}`);
 
 let myPlayer = null;
 let isMyTurn = false;
@@ -13,18 +13,34 @@ const winningCombinations = [
 ];
 
 // --- GESTIÓN DE MENSAJES RECIBIDOS ---
+function showToast(msg) {
+    const t = document.getElementById('toast');
+    if (!t) return;
+    t.textContent = msg;
+    t.classList.add('show');
+    clearTimeout(showToast._timer);
+    showToast._timer = setTimeout(() => t.classList.remove('show'), 2500);
+}
+
 socket.onmessage = (event) => {
     const data = JSON.parse(event.data);
 
     if (data.type === 'player') {
         myPlayer = data.player;
-        isMyTurn = (myPlayer === 'X');
+        if (Array.isArray(data.board)) board = data.board;
+        isMyTurn = (myPlayer === 'X') && board.every(c => c === '');
+        renderBoard();
         updateInfo();
+        showToast(`Conectado como jugador ${myPlayer}`);
+    }
+
+    if (data.type === 'opponent-joined') {
+        showToast(`Jugador ${data.player} se ha conectado`);
     }
 
     if (data.type === 'move') {
         board[data.index] = data.player;
-        isMyTurn = true; // Ahora es mi turno porque el otro ya movió
+        isMyTurn = (data.player !== myPlayer);
         renderBoard();
         updateInfo();
     }
@@ -32,6 +48,23 @@ socket.onmessage = (event) => {
     if (data.type === 'reset') {
         executeLocalReset();
     }
+
+    if (data.type === 'full') {
+        document.getElementById('info').textContent = 'Sala llena (2/2). Intenta más tarde.';
+        gameActive = false;
+    }
+
+    if (data.type === 'opponent-left') {
+        showToast(`Jugador ${data.player || ''} se ha desconectado`);
+        document.getElementById('info').textContent = 'Oponente desconectado. Esperando...';
+        executeLocalReset();
+        isMyTurn = false;
+    }
+};
+
+socket.onclose = () => {
+    document.getElementById('info').textContent = 'Conexión perdida con el servidor.';
+    gameActive = false;
 };
 
 // --- LÓGICA DEL JUEGO ---

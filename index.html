@@ -8,8 +8,11 @@
 </head>
 <body>
     <div class="container">
-        <h1>Tic Tac Toe</h1>
+        <h1>🎮 Tic Tac Toe</h1>
         <div class="info" id="info">Turno: X</div>
+        <div id="roomDisplay" class="room-display"></div>
+        <div id="toast" class="toast"></div>
+        
         <div class="board" id="board">
             <button class="cell" data-index="0"></button>
             <button class="cell" data-index="1"></button>
@@ -21,11 +24,14 @@
             <button class="cell" data-index="7"></button>
             <button class="cell" data-index="8"></button>
         </div>
+
         <div class="buttons">
             <button class="reset-btn" onclick="resetGame()">Nuevo Juego</button>
             <button class="mode-btn" onclick="toggleMode()">Modo: <span id="modeText">PvP</span></button>
         </div>
+
         <div class="mode-label">Modo actual: <strong id="modeDisplay">Jugador vs Jugador</strong></div>
+
     </div>
 
     <script src="script.js"></script>
